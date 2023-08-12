@@ -1,9 +1,0 @@
-const express = require('express');
-const initMiddleware = require('../config/initMiddleware');
-const initRoutes = require('../routes');
-const app = express();
-
-initMiddleware(app);
-initRoutes(app);
-
-module.exports = app;
