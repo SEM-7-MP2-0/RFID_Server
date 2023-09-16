@@ -10,6 +10,7 @@ import axios from 'axios';
 import { encryptPassword } from '../utils/bcrypt.utils';
 import { getEnv } from '../utils/dotenv.utils';
 import { IStudent } from '../@types/model';
+import { uploadFileToDestination } from '../utils/firebase.utils';
 
 const router = express.Router();
 
@@ -454,6 +455,397 @@ router.post(
       log.error(err);
       return res.status(500).json({
         message: 'Error saving attendance',
+      });
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /faculty/getattendancesubjectname:
+ *  post:
+ *    description: Get attendance subject name of a class
+ *    parameters:
+ *    - name: authorization
+ *      description: authorization token
+ *      required: true
+ *      in: header
+ *      type: string
+ *    - name: department
+ *      description: department
+ *      required: true
+ *      in: formData
+ *      type: string
+ *    - name: dateofleaving
+ *      description: date of leaving
+ *      required: true
+ *      in: formData
+ *      type: string
+ *    - name: datefrom
+ *      description: date from
+ *      required: true
+ *      type: string
+ *      in: formData
+ *    - name: dateto
+ *      description: date to
+ *      required: true
+ *      in: formData
+ *      type: string
+ *
+ *    responses:
+ *      200:
+ *        description: Report generated successfully
+ *      400:
+ *        description: Error generating report
+ *      500:
+ *        description: Error generating report
+ *      404:
+ *        description: Student not found
+ *      401:
+ *        description: Unauthorized
+ *      403:
+ *        description: Forbidden
+ */
+
+router.post(
+  '/getattendancesubjectname',
+  deserializeUser,
+  isFaculty,
+  async (req: Request & { user?: any }, res: Response): Promise<Response> => {
+    log.info('POST /faculty/getattendancesubjectname');
+    try {
+      const faculty = await Faculty.findById(req.user._id);
+      if (!faculty) {
+        return res.status(400).json({
+          message: 'Faculty not found',
+        });
+      }
+      const { department, dateofleaving, datefrom, dateto } = req.body;
+      const students = await Students.aggregate([
+        {
+          $match: {
+            department: department,
+            dateofleaving: dateofleaving,
+          },
+        },
+        {
+          $unwind: '$attendance',
+        },
+        {
+          $match: {
+            'attendance.createdAt': {
+              $gte: new Date(datefrom),
+              $lte: new Date(dateto),
+            },
+          },
+        },
+        {
+          $group: {
+            _id: '$attendance.subject',
+          },
+        },
+      ]);
+      if (students.length === 0) {
+        return res.status(404).json({
+          message: 'Students not found',
+        });
+      }
+      const subjectName = [] as Array<string>;
+      for (const stud of students) {
+        subjectName.push(stud._id);
+      }
+      return res.status(200).json({
+        message: 'Subject get successfully',
+        data: subjectName,
+      });
+    } catch (err) {
+      log.error(err);
+      return res.status(500).json({
+        message: 'Error generating report',
+      });
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /faculty/genereatedefaultersreport:
+ *  post:
+ *    description: Will send the file of the student attendance report and defaulters will be highlighted
+ *    parameters:
+ *    - name: authorization
+ *      description: authorization token
+ *      required: true
+ *      in: header
+ *      type: string
+ *    - name: department
+ *      description: department
+ *      required: true
+ *      in: formData
+ *      type: string
+ *    - name: dateofleaving
+ *      description: date of leaving
+ *      required: true
+ *      in: formData
+ *      type: string
+ *    - name: datefrom
+ *      description: date from
+ *      required: true
+ *      type: string
+ *      in: formData
+ *    - name: dateto
+ *      description: date to
+ *      required: true
+ *      in: formData
+ *      type: string
+ *    - name: subjectandtotallectures
+ *      description: subject and total lectures
+ *      required: true
+ *      in: formData
+ *      type: string
+ *    responses:
+ *      200:
+ *        description: Report generated successfully
+ *      400:
+ *        description: Error generating report
+ *      500:
+ *        description: Error generating report
+ *      404:
+ *        description: Student not found
+ *      401:
+ *        description: Unauthorized
+ *      403:
+ *        description: Forbidden
+ */
+
+router.post(
+  '/genereatedefaultersreport',
+  deserializeUser,
+  isFaculty,
+  async (req: Request & { user?: any }, res: Response): Promise<Response> => {
+    log.info('POST /faculty/genereatedefaultersreport');
+    try {
+      const faculty = await Faculty.findById(req.user._id);
+      if (!faculty) {
+        return res.status(400).json({
+          message: 'Faculty not found',
+        });
+      }
+      type subjectandtotallectures = {
+        subject: string;
+        totallectures: number;
+      };
+      const {
+        department,
+        dateofleaving,
+        datefrom,
+        dateto,
+        subjectandtotallectures,
+      } = req.body;
+
+      const subjectandtotallecturesJson = JSON.parse(
+        subjectandtotallectures
+      ) as Array<subjectandtotallectures>;
+      const allSubjects = subjectandtotallecturesJson.map(
+        (subject) => subject.subject
+      );
+      const students = await Students.aggregate([
+        {
+          $match: {
+            department: department,
+            dateofleaving: dateofleaving,
+          },
+        },
+        {
+          $unwind: '$attendance',
+        },
+        {
+          $match: {
+            'attendance.createdAt': {
+              $gte: new Date(datefrom),
+              $lte: new Date(dateto),
+            },
+          },
+        },
+        {
+          $match: {
+            'attendance.subject': {
+              $in: allSubjects,
+            },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              student: '$prn',
+              email: '$email',
+              subject: '$attendance.subject',
+            },
+            attendedLectures: {
+              $sum: {
+                $cond: ['$attendance.attended', 1, 0],
+              },
+            },
+            name: {
+              $first: '$name',
+            },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            student: '$_id.student',
+            email: '$_id.email',
+            name: '$name',
+            prn: '$_id.student',
+            attendedLectures: '$attendedLectures',
+            subject: '$_id.subject',
+          },
+        },
+      ]);
+
+      if (students.length === 0) {
+        return res.status(404).json({
+          message: 'Students not found',
+        });
+      }
+
+      const workbook = new excel.Workbook();
+      const worksheet = workbook.addWorksheet('My Sheet');
+      const studentSubjectWiseAttendance: {
+        [prn: string]: {
+          info: Array<{
+            subject: string;
+            attendedLectures: number;
+            totalLectures: number;
+            percentage: number;
+          }>;
+          name: string;
+          email: string;
+        };
+      } = {};
+      for (const stud of students) {
+        for (const subject of subjectandtotallecturesJson) {
+          if (stud.subject === subject.subject) {
+            if (studentSubjectWiseAttendance[stud.prn] === undefined) {
+              studentSubjectWiseAttendance[stud.prn] = {
+                info: [
+                  {
+                    subject: stud.subject,
+                    attendedLectures: stud.attendedLectures,
+                    totalLectures: subject.totallectures,
+                    percentage:
+                      (stud.attendedLectures / subject.totallectures) * 100,
+                  },
+                ],
+                name: stud.name,
+                email: stud.email,
+              };
+            } else {
+              studentSubjectWiseAttendance[stud.prn]!.info.push({
+                subject: stud.subject,
+                attendedLectures: stud.attendedLectures,
+                totalLectures: subject.totallectures,
+                percentage:
+                  (stud.attendedLectures / subject.totallectures) * 100,
+              });
+            }
+          }
+        }
+      }
+      // sort the studentSubjectWiseAttendance by prn
+      const studentSubjectWiseAttendanceSorted = Object.keys(
+        studentSubjectWiseAttendance
+      ).sort((a, b) => {
+        return a.localeCompare(b);
+      });
+
+      // // addinng the data to the excel sheet
+      worksheet.addRow([
+        'Name',
+        'PRN',
+        'Email',
+        ...subjectandtotallecturesJson
+          .map((subject) => {
+            return [subject.subject, ''];
+          })
+          .flat(),
+      ]);
+
+      // merge subject cells
+      for (let i = 0; i < subjectandtotallecturesJson.length; i++) {
+        worksheet.mergeCells(1, i * 2 + 4, 1, i * 2 + 5);
+      }
+
+      worksheet.addRow([
+        '',
+        '',
+        '',
+        ...subjectandtotallecturesJson
+          .map((subject) => {
+            return [subject.totallectures, 100];
+          })
+          .flat(),
+      ]);
+
+      // add student data
+      for (const stud of studentSubjectWiseAttendanceSorted) {
+        const student = studentSubjectWiseAttendance[stud]!;
+        const studentData = [
+          student.name,
+          stud,
+          student.email,
+          ...subjectandtotallecturesJson
+            .map((subject) => {
+              const subjectData = student.info.find(
+                (info) => info.subject === subject.subject
+              );
+              if (subjectData) {
+                return [subjectData.attendedLectures, subjectData.percentage];
+              } else {
+                return [0, 0];
+              }
+            })
+            .flat(),
+        ];
+        worksheet.addRow(studentData);
+      }
+      // highlight defaulters
+      for (let i = 3; i <= worksheet.rowCount; i++) {
+        const row = worksheet.getRow(i);
+        for (let j = 4; j <= row.cellCount; j += 2) {
+          const percentage = (row.getCell(j + 1).value as number) || 0;
+          if (percentage < 50) {
+            row.getCell(j + 1).fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFFF0000' },
+            };
+          } else if (percentage < 75) {
+            row.getCell(j + 1).fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFFFA500' },
+            };
+          }
+        }
+      }
+
+      const fileName = 'uploads/' + faculty.name + '.xlsx';
+      await workbook.xlsx.writeFile(fileName);
+      const filePath = await uploadFileToDestination(
+        fileName,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        `attendanceReport/${dateofleaving}-${department}-${datefrom}-${dateto}.xlsx`
+      );
+      return res.status(200).json({
+        message: 'Report generated successfully',
+        filePath: filePath,
+      });
+    } catch (err) {
+      log.error(err);
+      return res.status(500).json({
+        message: 'Error generating report',
       });
     }
   }
