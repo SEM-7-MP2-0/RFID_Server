@@ -38,6 +38,20 @@ const FacultySchema: Schema<IFaculty> = new Schema(
       type: String,
       required: true,
     },
+    batch: [
+      {
+        batchname: String,
+        students: [
+          {
+            student_id: {
+              type: Schema.Types.ObjectId,
+              ref: 'student',
+              required: true,
+            },
+          },
+        ],
+      },
+    ],
   },
   {
     timestamps: true,

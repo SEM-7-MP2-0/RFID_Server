@@ -11,6 +11,7 @@ import { encryptPassword } from '../utils/bcrypt.utils';
 import { getEnv } from '../utils/dotenv.utils';
 import { IStudent } from '../@types/model';
 import { uploadFileToDestination } from '../utils/firebase.utils';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
@@ -603,6 +604,7 @@ router.post(
  *      required: true
  *      in: formData
  *      type: string
+ *      example: [{"subject":"OS","totallectures":10},{"subject":"IP","totallectures":10}]
  *    responses:
  *      200:
  *        description: Report generated successfully
@@ -846,6 +848,424 @@ router.post(
       log.error(err);
       return res.status(500).json({
         message: 'Error generating report',
+      });
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /faculty/getallstudents:
+ *  get:
+ *    description: Get all students prn name and class
+ *    parameters:
+ *    - name: authorization
+ *      description: authorization token
+ *      required: true
+ *      in: header
+ *      type: string
+ *    responses:
+ *      200:
+ *        description: All students
+ *      400:
+ *        description: Error getting all students
+ *      500:
+ *        description: Error getting all students
+ *      404:
+ *        description: Students not found
+ *      401:
+ *        description: Unauthorized
+ *      403:
+ *        description: Forbidden
+ */
+
+router.get(
+  '/getallstudents',
+  deserializeUser,
+  isFaculty,
+  async (req: Request & { user?: any }, res: Response): Promise<Response> => {
+    log.info('GET /faculty/getallstudents');
+    try {
+      const faculty = await Faculty.findById(req.user._id);
+      if (!faculty) {
+        return res.status(400).json({
+          message: 'Faculty not found',
+        });
+      }
+      const students = await Students.find({}).select('prn name department');
+      if (students.length === 0) {
+        return res.status(404).json({
+          message: 'Students not found',
+        });
+      }
+      return res.status(200).json({
+        message: 'All students',
+        students,
+      });
+    } catch (err) {
+      log.error(err);
+      return res.status(500).json({
+        message: 'Error getting all students',
+      });
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /faculty/getmybatches:
+ *  get:
+ *    description: Get all batches of a faculty
+ *    parameters:
+ *    - name: authorization
+ *      description: authorization token
+ *      required: true
+ *      in: header
+ *      type: string
+ *    responses:
+ *      200:
+ *        description: All batches
+ *      400:
+ *        description: Error getting all batches
+ *      500:
+ *        description: Error getting all batches
+ *      404:
+ *        description: Batches not found
+ *      401:
+ *        description: Unauthorized
+ *      403:
+ *        description: Forbidden
+ */
+
+router.get(
+  '/getmybatches',
+  deserializeUser,
+  isFaculty,
+  async (req: Request & { user?: any }, res: Response): Promise<Response> => {
+    log.info('GET /faculty/getmybatches');
+    try {
+      const faculty = await Faculty.findById(req.user._id).select(
+        'batch.batchname batch._id'
+      );
+      if (!faculty) {
+        return res.status(400).json({
+          message: 'Faculty not found',
+        });
+      }
+      return res.status(200).json({
+        message: 'All batches',
+        batches: faculty.batch,
+      });
+    } catch (err) {
+      log.error(err);
+      return res.status(500).json({
+        message: 'Error getting all batches',
+      });
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /faculty/createbatch:
+ *  post:
+ *    description: Create a batch of a faculty
+ *    parameters:
+ *    - name: authorization
+ *      description: authorization token
+ *      required: true
+ *      in: header
+ *      type: string
+ *    - name: batchname
+ *      description: batch name
+ *      required: true
+ *      in: formData
+ *      type: string
+ *    - name: students
+ *      description: students id
+ *      required: true
+ *      in: formData
+ *      type: string
+ *      example: ["64345a9a6eb10cbd085cf7df","64345a9a6eb10cbd085cf7ee"]
+ *    responses:
+ *      200:
+ *        description: Batch created successfully
+ *      400:
+ *        description: Error creating batch
+ *      500:
+ *        description: Error creating batch
+ *      404:
+ *        description: Students not found
+ *      401:
+ *        description: Unauthorized
+ *      403:
+ *        description: Forbidden
+ *      409:
+ *        description: Batch already exists
+ */
+
+router.post(
+  '/createbatch',
+  deserializeUser,
+  isFaculty,
+  async (req: Request & { user?: any }, res: Response): Promise<Response> => {
+    log.info('POST /faculty/createbatch');
+    try {
+      const faculty = await Faculty.findById(req.user._id);
+      if (!faculty) {
+        return res.status(400).json({
+          message: 'Faculty not found',
+        });
+      }
+      const { batchname, students } = req.body;
+      const batch = faculty.batch.find(
+        (batch) => batch.batchname === batchname
+      );
+      if (batch) {
+        return res.status(409).json({
+          message: 'Batch already exists',
+        });
+      }
+      // validate students id
+      console.log(JSON.parse(students));
+      const studentsObj = await Students.find({
+        _id: {
+          $in: JSON.parse(students).map(
+            (student: string) => new mongoose.Types.ObjectId(student)
+          ),
+        },
+      });
+      if (studentsObj.length === 0) {
+        return res.status(404).json({
+          message: 'Students not found',
+        });
+      }
+
+      const batchObj = {
+        batchname: batchname,
+        students: studentsObj.map((student) => ({
+          student_id: student._id as string,
+        })),
+      };
+      console.log(batchObj);
+      faculty.batch.push(batchObj);
+      await faculty.save();
+      return res.status(200).json({
+        message: 'Batch created successfully',
+      });
+    } catch (err) {
+      log.error(err);
+      return res.status(500).json({
+        message: 'Error creating batch',
+      });
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /faculty/getbatchstudents/{id}:
+ *  get:
+ *    description: Get all students of a batch of a faculty
+ *    parameters:
+ *    - name: authorization
+ *      description: authorization token
+ *      required: true
+ *      in: header
+ *      type: string
+ *    - name: id
+ *      description: batch id
+ *      required: true
+ *      in: path
+ *      type: string
+ *    responses:
+ *      200:
+ *        description: All students of a batch
+ *      400:
+ *        description: Error getting all students of a batch
+ *      500:
+ *        description: Error getting all students of a batch
+ *      404:
+ *        description: Students not found
+ *      401:
+ *        description: Unauthorized
+ *      403:
+ *        description: Forbidden
+ */
+
+router.get(
+  '/getbatchstudents/:id',
+  deserializeUser,
+  isFaculty,
+  async (
+    req: Request<{ id: string }, any, any> & { user?: any },
+    res: Response
+  ): Promise<Response> => {
+    log.info('GET /faculty/getbatchstudents/:id');
+    try {
+      const faculty = await Faculty.findById(req.user._id).select(
+        'batch.batchname'
+      );
+      if (!faculty) {
+        return res.status(400).json({
+          message: 'Faculty not found',
+        });
+      }
+      const facultyBatchStudentsInfo = await Faculty.aggregate([
+        {
+          $match: {
+            _id: new mongoose.Types.ObjectId(req.user._id),
+          },
+        },
+        {
+          $unwind: '$batch',
+        },
+        {
+          $match: {
+            'batch._id': new mongoose.Types.ObjectId(req.params.id),
+          },
+        },
+        {
+          $lookup: {
+            from: 'students',
+            localField: 'batch.students.student_id',
+            foreignField: '_id',
+            as: 'students',
+          },
+        },
+        {
+          $unwind: '$students',
+        },
+        {
+          $project: {
+            _id: '$students._id',
+            name: '$students.name',
+            prn: '$students.prn',
+            email: '$students.email',
+            department: '$students.department',
+            dateofleaving: '$students.dateofleaving',
+          },
+        },
+      ]);
+      if (facultyBatchStudentsInfo.length === 0) {
+        return res.status(404).json({
+          message: 'Students not found',
+        });
+      }
+      return res.status(200).json({
+        message: 'All students of a batch',
+        students: facultyBatchStudentsInfo,
+      });
+    } catch (err) {
+      log.error(err);
+      return res.status(500).json({
+        message: 'Error getting all students of a batch',
+      });
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /faculty/updatebatch:
+ *  post:
+ *    description: Update a batch of a faculty
+ *    parameters:
+ *    - name: authorization
+ *      description: authorization token
+ *      required: true
+ *      in: header
+ *      type: string
+ *    - name: batchname
+ *      description: batch name
+ *      required: true
+ *      in: formData
+ *      type: string
+ *    - name: students
+ *      description: students id
+ *      required: true
+ *      in: formData
+ *      type: string
+ *      example: ["64345a9a6eb10cbd085cf7df","64345a9a6eb10cbd085cf7ee"]
+ *    - name: id
+ *      description: batch id
+ *      required: true
+ *      in: formData
+ *      type: string
+ *    responses:
+ *      200:
+ *        description: Batch updated successfully
+ *      400:
+ *        description: Error updating batch
+ *      500:
+ *        description: Error updating batch
+ *      404:
+ *        description: Students not found
+ *      401:
+ *        description: Unauthorized
+ *      403:
+ *        description: Forbidden
+ *      409:
+ *        description: Batch already exists
+ */
+
+router.post(
+  '/updatebatch',
+  deserializeUser,
+  isFaculty,
+  async (req: Request & { user?: any }, res: Response): Promise<Response> => {
+    log.info('POST /faculty/updatebatch');
+    try {
+      const faculty = await Faculty.findById(req.user._id);
+      if (!faculty) {
+        return res.status(400).json({
+          message: 'Faculty not found',
+        });
+      }
+      const { batchname, students, id } = req.body;
+      const batch = faculty.batch.find(
+        //@ts-ignore
+        (batch) => batch.batchname === batchname && batch._id.toString() !== id
+      );
+      if (batch) {
+        return res.status(409).json({
+          message: 'Batch already exists',
+        });
+      }
+      // validate students id
+      const studentsObj = await Students.find({
+        _id: {
+          $in: JSON.parse(students).map(
+            (student: string) => new mongoose.Types.ObjectId(student)
+          ),
+        },
+      });
+      if (studentsObj.length === 0) {
+        return res.status(404).json({
+          message: 'Students not found',
+        });
+      }
+      const batchIndex = faculty.batch.findIndex(
+        //@ts-ignore
+        (batch) => batch._id.toString() === id
+      );
+      if (batchIndex === -1) {
+        return res.status(404).json({
+          message: 'Batch not found',
+        });
+      }
+      faculty.batch[batchIndex]!.batchname = batchname;
+      faculty.batch[batchIndex]!.students = studentsObj.map((student) => ({
+        student_id: student._id as string,
+      }));
+      await faculty.save();
+      return res.status(200).json({
+        message: 'Batch updated successfully',
+      });
+    } catch (err) {
+      log.error(err);
+      return res.status(500).json({
+        message: 'Error updating batch',
       });
     }
   }
