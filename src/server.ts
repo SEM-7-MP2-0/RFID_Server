@@ -6,7 +6,7 @@ import log from './log/index';
 import { Request, Response } from 'express';
 
 app.get('/', (req: Request, res: Response) => {
-  return res.send('Hello Welcome to RFID Backend');
+  return res.send('Hello Welcome to RFID Backend!!');
 });
 
 app.listen(PORT, async () => {
