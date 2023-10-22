@@ -13,4 +13,4 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-    command: yarn run start
+    command: yarn run dev
