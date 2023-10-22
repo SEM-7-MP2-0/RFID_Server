@@ -1,7 +1,7 @@
 import app from './bin/www';
 import { getEnv } from './utils/dotenv.utils';
 import connectDb from './db/connect';
-const PORT = getEnv('PORT') || 3000;
+const PORT = getEnv('PORT') || 5000;
 import log from './log/index';
 import { Request, Response } from 'express';
 
