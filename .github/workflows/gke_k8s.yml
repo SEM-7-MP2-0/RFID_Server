@@ -25,4 +25,4 @@ jobs:
             CLUSTER_NAME: ${{ env.GKE_CLUSTER }}
             ZONE_NAME: ${{ env.GKE_ZONE }}
           with:
-            args: delete deployment rfid-backend-deployment && kubectl apply -f Kubernetes/
+            args: delete deployment rfid-backend-deployment --ignore-not-found=true echo "Deployment rfid-backend-deployment deleted." && kubectl apply -f Kubernetes/
