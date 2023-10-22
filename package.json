@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "start": "node ./dist/server.js",
-    "tsc": "tsc",
+    "tsc": "tsc -p .",
     "dev": "nodemon --config nodemon.json src/server.ts",
     "lint": "eslint --ext .ts .",
     "fix": "eslint --fix --ext .ts .",

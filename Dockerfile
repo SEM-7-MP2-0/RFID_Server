@@ -5,6 +5,7 @@ COPY ["package.json", "package-lock.json*", "npm-shrinkwrap.json*", "yarn.lock",
 RUN npm i yarn
 RUN yarn install
 COPY . .
+RUN yarn tsc
 EXPOSE 5000
 RUN chown -R node /app
 USER node

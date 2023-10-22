@@ -24,6 +24,6 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-    command: yarn run dev
+    command: yarn start
 volumes:
   mongo-data:
