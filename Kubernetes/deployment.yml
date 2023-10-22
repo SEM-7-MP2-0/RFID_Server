@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deeplearningservice-deployment
+  labels:
+    app: deeplearningservice-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deeplearningservice-deployment
+  template:
+    metadata:
+      labels:
+        app: deeplearningservice-deployment
+    spec:
+      containers:
+      - name: deeplearningservice-app
+        image: salmanad01/rfid-deeplearningservice:latest
+        imagePullPolicy: Always
+        env:
+          - name: ACCESS_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: deeplearningservice-secret
+                key: ACCESS_TOKEN
+        ports:
+        - containerPort: 5002
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rfid-backend-deployment
+  labels:
+    app: rfid-backend-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rfid-backend-deployment
+  template:
+    metadata:
+      labels:
+        app: rfid-backend-deployment
+    spec:
+      containers:
+      - name: rfid-backend
+        image:  salmanad01/rfid-server:latest
+        imagePullPolicy: Always
+        env:
+          - name: MONGODB_URI
+            valueFrom:
+              secretKeyRef:
+                name: rfid-server-secret
+                key: MONGODB_URI
+          - name: SALT_ROUNDS
+            valueFrom:
+              secretKeyRef:
+                name: rfid-server-secret
+                key: SALT_ROUNDS
+          - name: ACCESS_TOKEN_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: rfid-server-secret
+                key: ACCESS_TOKEN_SECRET
+          - name: ACCESS_TOKEN_LIFETIME
+            valueFrom:
+              secretKeyRef:
+                name: rfid-server-secret
+                key: ACCESS_TOKEN_LIFETIME
+          - name: FIREBASE_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: rfid-server-secret
+                key: FIREBASE_PRIVATE_KEY
+          - name: FIREBASE_PROJECT_ID
+            valueFrom:
+              secretKeyRef:
+                name: rfid-server-secret
+                key: FIREBASE_PROJECT_ID
+          - name: FIREBASE_STORAGE_BUCKET
+            valueFrom:
+              secretKeyRef:
+                name: rfid-server-secret
+                key: FIREBASE_STORAGE_BUCKET
+        ports:
+        - containerPort: 5000
+        
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: deeplearningservice-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: deeplearningservice-deployment
+  ports:
+    - port: 5002
+      targetPort: 5002
+      nodePort: 30002
+    
+--- 
+apiVersion: v1
+kind: Service
+metadata:
+  name: rfid-backend-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: rfid-backend-deployment
+  ports:
+    - port: 5000
+      targetPort: 5000
+      nodePort: 30000

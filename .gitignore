@@ -24,7 +24,10 @@ coverage
 
 uploads/*
 !uploads/.gitkeep
-
+# GCP service account
+gcp_sa.json
+# K8S secret
+secret.yml
 # nyc test coverage
 .nyc_output
 

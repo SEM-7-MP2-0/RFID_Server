@@ -1,0 +1,28 @@
+name: GKE Deployment
+
+on:
+  workflow_run:
+    workflows: [ "Docker Hub" ]
+    branches: [ "main" ]
+    types:
+      - completed
+
+env:
+    PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+    GKE_CLUSTER: rfid-cluster    
+    GKE_ZONE: us-central1-c   
+
+jobs:
+    Deploy:
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@master
+        - name: kubectl - Google Cloud GKE cluster.
+          uses: ameydev/gke-kubectl-action@master
+          env:
+            PROJECT_ID: ${{ env.PROJECT_ID }}
+            APPLICATION_CREDENTIALS: ${{ secrets.GKE_SA_KEY }}
+            CLUSTER_NAME: ${{ env.GKE_CLUSTER }}
+            ZONE_NAME: ${{ env.GKE_ZONE }}
+          with:
+            args: apply -f Kubernetes/
