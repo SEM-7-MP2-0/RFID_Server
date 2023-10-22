@@ -49,11 +49,6 @@ spec:
         image:  salmanad01/rfid-server:latest
         imagePullPolicy: Always
         env:
-          - name: PORT
-            valueFrom:
-              secretKeyRef:
-                name: rfid-server-secret
-                key: PORT
           - name: MONGODB_URI
             valueFrom:
               secretKeyRef:
