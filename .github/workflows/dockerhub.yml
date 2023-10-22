@@ -1,0 +1,31 @@
+name: Docker Hub
+
+on:
+  workflow_run:
+    workflows: [ "Node.js CI" ]
+    branches: [ "main" ]
+    types:
+      - completed
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    
+    - name: Login to Docker Hub
+      run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+
+    - name: Build using compose file
+      run: docker compose build
+    
+    - name: Tag the image
+      run: |
+        docker tag rfid-server ${{ secrets.DOCKER_USERNAME }}/rfid-server:latest 
+        docker tag rfid-server ${{ secrets.DOCKER_USERNAME }}/rfid-server:${{ github.run_number }}
+    
+    - name: Push the image
+      run: |
+        docker push ${{ secrets.DOCKER_USERNAME }}/rfid-server:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/rfid-server:${{ github.run_number }}
