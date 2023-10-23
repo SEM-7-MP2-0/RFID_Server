@@ -116,3 +116,37 @@ spec:
     - port: 5000
       targetPort: 5000
       nodePort: 30000
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-ingress  
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+spec:
+  rules:
+    - host: project.rfidbackend.software
+      http:
+        paths:
+          - path: /output
+            pathType: Prefix
+            backend:
+              service:
+                name: deeplearningservice-service
+                port:
+                  number: 5002
+          - path: /detect_faces
+            pathType: Prefix
+            backend:
+              service:
+                name: deeplearningservice-service
+                port:
+                  number: 5002
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rfid-backend-service
+                port:
+                  number: 5000
