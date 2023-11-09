@@ -54,6 +54,11 @@ spec:
               secretKeyRef:
                 name: rfid-server-secret
                 key: MONGODB_URI
+          - name: RFID_SERVER_NGROK
+            valueFrom:
+              secretKeyRef:
+                name: rfid-server-secret
+                key: RFID_SERVER_NGROK
           - name: SALT_ROUNDS
             valueFrom:
               secretKeyRef:
