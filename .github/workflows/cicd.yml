@@ -1,0 +1,66 @@
+name: Continuous Integration and Continuous Deployment
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+env:
+  PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+  GKE_CLUSTER: rfid-cluster    
+  GKE_ZONE: us-central1-c  
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      
+    - name: Use Node.js 16.x
+      uses: actions/setup-node@v3
+      with:
+        node-version: 16.x
+        cache: 'yarn'
+    - run: yarn install --frozen-lockfile
+    
+    - name: lint
+      run : yarn run lint
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [ build ]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    
+    - name: Login to Docker Hub
+      run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+
+    - name: Build using compose file
+      run: docker compose build
+    
+    - name: Tag the image
+      run: |
+        docker tag rfid-server ${{ secrets.DOCKER_USERNAME }}/rfid-server:latest 
+        docker tag rfid-server ${{ secrets.DOCKER_USERNAME }}/rfid-server:${{ github.run_number }}
+    
+    - name: Push the image
+      run: |
+        docker push ${{ secrets.DOCKER_USERNAME }}/rfid-server:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/rfid-server:${{ github.run_number }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [ publish ]
+    steps:
+    - uses: actions/checkout@master
+    - name: kubectl - Google Cloud GKE cluster.
+      uses: ameydev/gke-kubectl-action@master
+      env:
+        PROJECT_ID: ${{ env.PROJECT_ID }}
+        APPLICATION_CREDENTIALS: ${{ secrets.GKE_SA_KEY }}
+        CLUSTER_NAME: ${{ env.GKE_CLUSTER }}
+        ZONE_NAME: ${{ env.GKE_ZONE }}
+      with:
+        args: delete deployment rfid-backend-deployment --ignore-not-found=true echo "Deployment rfid-backend-deployment deleted." && kubectl apply -f Kubernetes/
